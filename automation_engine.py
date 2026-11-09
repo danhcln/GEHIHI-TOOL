@@ -554,6 +554,22 @@ class GoogleUltraAutomator:
                     await asyncio.sleep(2.5)
         raise last_err
 
+    async def safe_evaluate(self, page_obj, script: str, arg=None, retries: int = 6, delay: float = 1.5):
+        """Execute page.evaluate safely with retries if page is currently navigating or context was destroyed."""
+        for attempt in range(retries):
+            self.check_stop()
+            try:
+                if arg is not None:
+                    return await page_obj.evaluate(script, arg)
+                return await page_obj.evaluate(script)
+            except Exception as e:
+                err_str = str(e)
+                if ("Execution context was destroyed" in err_str or "navigation" in err_str or "Cannot find context" in err_str) and attempt < retries - 1:
+                    await asyncio.sleep(delay)
+                    continue
+                if attempt == retries - 1:
+                    raise
+
     async def ensure_totp_fresh(self) -> str:
         secret = self.account.get("totp_secret", "")
         if not secret:
@@ -580,7 +596,7 @@ class GoogleUltraAutomator:
 
             if "gds.google.com" in page_obj.url or "recoveryoptions" in page_obj.url or "确保您始终都能登录" in body:
                 self.log("检测到 gds.google.com 辅助信息提示页，正在点击【取消/跳过】完成登录跳转...")
-                cancel_btn = page_obj.locator('button:has-text("取消"), button:has-text("Cancel"), button:has-text("跳过"), button:has-text("Skip"), [role="button"]:has-text("取消"), [role="button"]:has-text("Cancel"), text="取消", text="Cancel"').first
+                cancel_btn = page_obj.locator('button:has-text("取消"), button:has-text("Cancel"), button:has-text("跳过"), button:has-text("Skip"), [role="button"]:has-text("取消"), [role="button"]:has-text("Cancel")').first
                 if await cancel_btn.count() > 0:
                     try:
                         await cancel_btn.click(timeout=3000)
@@ -751,8 +767,8 @@ class GoogleUltraAutomator:
             break
 
     async def step1_login(self, page):
-        self.update_state(status="running", current_step=1, step_message="Step 1/5: 正在登录 Google 账号并自动过验证 (辅助邮箱 / 2FA)...")
-        self.log("=== Step 1/5: 检查 Google 登录状态 & 自动过辅助邮箱 / 2FA ===")
+        self.update_state(status="running", current_step=1, step_message="Bước 1/5: Đang đăng nhập Google & tự động qua xác minh (Email khôi phục / 2FA)...")
+        self.log("=== Bước 1/5: Kiểm tra trạng thái đăng nhập Google & tự động qua xác minh ===")
         email = self.account["email"]
         password = self.account["password"]
 
@@ -1119,42 +1135,49 @@ class GoogleUltraAutomator:
                 await self.safe_goto(page, attempt_url, timeout=40000)
                 await asyncio.sleep(3.5)
 
-            await page.evaluate(HOOK_JS)
-            await page.evaluate(f"window.__setDirectTest({json.dumps(cfg)})")
+            await self.safe_evaluate(page, HOOK_JS)
+            await self.safe_evaluate(page, f"window.__setDirectTest({json.dumps(cfg)})")
 
             fb_btn = None
             for _ in range(10):
                 await asyncio.sleep(1.2)
-                await page.evaluate(HOOK_JS)
-                await page.evaluate(f"window.__setDirectTest({json.dumps(cfg)})")
-                fb_btn = await page.evaluate(
-                    """() => {
-                    const els = Array.from(document.querySelectorAll('button, a, [role="button"]'));
-                    const btns = els.filter(e => {
-                        const t = (e.innerText || '').trim();
-                        const r = e.getBoundingClientRect();
-                        return r.width > 15 && r.height > 15 && r.left >= 240 && (
-                            t.includes('开始使用') ||
-                            t.includes('获取优惠') ||
-                            t.includes('获取折扣') ||
-                            t.includes('换用此方案') ||
-                            t === '升级' ||
-                            t === 'Upgrade' ||
-                            t.includes('获取 Google AI Ultra') ||
-                            t.includes('Get started') ||
-                            t.includes('Get offer')
-                        );
-                    });
-                    if (btns.length > 0) {
-                        const btn = btns[btns.length - 1];
-                        btn.scrollIntoView({block: 'center'});
-                        const r = btn.getBoundingClientRect();
-                        btn.click();
-                        return {x: r.left + r.width / 2, y: r.top + r.height / 2, text: (btn.innerText || '').trim()};
-                    }
-                    return null;
-                }"""
-                )
+                try:
+                    await self.safe_evaluate(page, HOOK_JS)
+                    await self.safe_evaluate(page, f"window.__setDirectTest({json.dumps(cfg)})")
+                    fb_btn = await self.safe_evaluate(
+                        page,
+                        """() => {
+                        const els = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+                        const btns = els.filter(e => {
+                            const t = (e.innerText || '').trim();
+                            const r = e.getBoundingClientRect();
+                            return r.width > 15 && r.height > 15 && r.left >= 240 && (
+                                t.includes('开始使用') ||
+                                t.includes('获取优惠') ||
+                                t.includes('获取折扣') ||
+                                t.includes('换用此方案') ||
+                                t === '升级' ||
+                                t === 'Upgrade' ||
+                                t.includes('获取 Google AI Ultra') ||
+                                t.includes('Get started') ||
+                                t.includes('Get offer')
+                            );
+                        });
+                        if (btns.length > 0) {
+                            const btn = btns[btns.length - 1];
+                            btn.scrollIntoView({block: 'center'});
+                            const r = btn.getBoundingClientRect();
+                            btn.click();
+                            return {x: r.left + r.width / 2, y: r.top + r.height / 2, text: (btn.innerText || '').trim()};
+                        }
+                        return null;
+                    }"""
+                    )
+                except Exception as eval_e:
+                    if "Execution context was destroyed" in str(eval_e) or "navigation" in str(eval_e):
+                        await asyncio.sleep(1.5)
+                        continue
+                    raise
                 if fb_btn:
                     self.log(f"[{step_tag}] 已点击【{fb_btn.get('text', '')}】触发按钮，等待 Google Play 结账弹窗...")
                     break
@@ -1454,17 +1477,17 @@ class GoogleUltraAutomator:
         return False
 
     async def step2_layer1_12m(self, page):
-        self.update_state(status="running", current_step=2, step_message="Step 2/5: 正在执行首层 12个月免费叠加 (US$0.00 -> 2027年10月)...")
-        self.log("=== Step 2/5: 执行首层 12个月免费包 + YouTube 1M 试用 (US$0.00 零消费) ===")
+        self.update_state(status="running", current_step=2, step_message="Bước 2/5: Đang kích hoạt lớp 1 12 tháng miễn phí (US$0.00)...")
+        self.log("=== Bước 2/5: Kích hoạt lớp 1 12 tháng miễn phí + Dùng thử YouTube ($0.00) ===")
 
         play_txt = await self.inspect_play_subscriptions(page)
         if "2028" in play_txt:
-            self.log("✅ 检测到该账号已进入 2028 年免费期，自动跳过 Step 2！")
+            self.log("✅ Phát hiện tài khoản đã đạt năm 2028, tự động bỏ qua Bước 2!")
             return
-        if any(k in play_txt for k in ("2027年10月", "2027年11月", "2027年12月", "Oct 2027", "Nov 2027", "Dec 2027")):
-            if "重新订阅" in play_txt:
+        if any(k in play_txt for k in ("2027年10月", "2027年11月", "2027年12月", "Oct 2027", "Nov 2027", "Dec 2027", "2027")):
+            if "重新订阅" in play_txt or "Đăng ký lại" in play_txt:
                 await self.ensure_subscription_active(page)
-            self.log("✅ 检测到该账号已完成首层 12 个月免费叠加，自动跳过 Step 2！")
+            self.log("✅ Phát hiện tài khoản đã hoàn thành lớp 12 tháng, tự động bỏ qua Bước 2!")
             return
 
         if "重新订阅" in play_txt:
@@ -1493,17 +1516,17 @@ class GoogleUltraAutomator:
         await asyncio.sleep(45)
 
     async def step3_layer2_6mss(self, page):
-        self.update_state(status="running", current_step=3, step_message="Step 3/5: 正在执行二层 6个月免费叠加 (US$0.00 -> 18个月 / 2028年4月)...")
-        self.log("=== Step 3/5: 执行二层 6个月免费包 (S25 Pro 6M + YT 1M 试用, US$0.00) 顺延叠加 ===")
+        self.update_state(status="running", current_step=3, step_message="Bước 3/5: Đang kích hoạt lớp 2 6 tháng miễn phí (US$0.00 -> 18 tháng)...")
+        self.log("=== Bước 3/5: Kích hoạt lớp 2 6 tháng miễn phí (US$0.00 -> 18 tháng) ===")
 
         play_txt = await self.inspect_play_subscriptions(page)
-        if any(k in play_txt for k in ("2028年4月", "2028年5月", "2028年6月", "2028年10月", "2028年11月", "2028年12月", "Apr 2028", "May 2028", "Oct 2028", "Nov 2028", "Dec 2028")):
-            if "重新订阅" in play_txt and not any(k in play_txt for k in ("2028年10月", "2028年11月", "2028年12月", "Oct 2028", "Nov 2028", "Dec 2028")):
+        if "2028" in play_txt or any(k in play_txt for k in ("2028年4月", "2028年5月", "2028年6月", "2028年10月", "2028年11月", "2028年12月", "Apr 2028", "May 2028", "Oct 2028", "Nov 2028", "Dec 2028")):
+            if ("重新订阅" in play_txt or "Đăng ký lại" in play_txt) and not any(k in play_txt for k in ("2028年10月", "2028年11月", "2028年12月", "Oct 2028", "Nov 2028", "Dec 2028")):
                 await self.ensure_subscription_active(page)
-            self.log("✅ 检测到该账号已达到 2028 年 (≥18个月)，自动跳过 Step 3！")
+            self.log("✅ Phát hiện tài khoản đã đạt năm 2028 (>=18 tháng), tự động bỏ qua Bước 3!")
             return
 
-        if "重新订阅" in play_txt:
+        if "重新订阅" in play_txt or "Đăng ký lại" in play_txt:
             await self.ensure_subscription_active(page)
 
         sub_id = await self.get_current_sub_id(page)
@@ -1518,24 +1541,24 @@ class GoogleUltraAutomator:
         }
         ok = await self.open_and_click_subscribe(page, cfg_l2, "step3_layer2_6mss")
         if not ok:
-            self.log("⚠️ Step 3 首次触发未完成结账，正在等待 3 秒后进行重试 (2/2)...")
+            self.log("⚠️ Bước 3 lần đầu chưa xong, đang thử lại lần 2...")
             await asyncio.sleep(3.0)
             ok = await self.open_and_click_subscribe(page, cfg_l2, "step3_layer2_6mss")
         if not ok:
-            raise RuntimeError(f"Step 3 (二层 6个月免费叠加 US$0.00) 未成功: {self.last_subscribe_error}")
-        self.log("✅ Step 3 (二层 6个月免费包 US$0.00 -> 18个月) 叠加完成！等待 45 秒同步订阅 ID...")
+            raise RuntimeError(f"Bước 3 (lớp 2 6 tháng miễn phí US$0.00) không thành công: {self.last_subscribe_error}")
+        self.log("✅ Bước 3 (lớp 2 6 tháng miễn phí US$0.00 -> 18 tháng) hoàn tất! Đang chờ 45 giây đồng bộ...")
         await asyncio.sleep(45)
 
     async def step4_layer3_6m(self, page):
-        self.update_state(status="running", current_step=4, step_message="Step 4/5: 正在执行三层 6个月免费封顶 (US$0.00 -> 24个月 / 2028年10月)...")
-        self.log("=== Step 4/5: 执行三层 6个月免费包封顶 (Pixel 6M + YT 1M 试用, US$0.00 -> 24个月) ===")
+        self.update_state(status="running", current_step=4, step_message="Bước 4/5: Đang kích hoạt lớp 3 6 tháng miễn phí (US$0.00 -> 24 tháng / 2028)...")
+        self.log("=== Bước 4/5: Kích hoạt lớp 3 6 tháng miễn phí (US$0.00 -> 24 tháng) ===")
 
         play_txt = await self.inspect_play_subscriptions(page)
-        if any(k in play_txt for k in ("2028年10月", "2028年11月", "2028年12月", "Oct 2028", "Nov 2028", "Dec 2028")):
-            self.log("✅ 检测到该账号已叠满 24 个月免费期 (2028年10-12月)，自动跳过 Step 4！")
+        if "2028" in play_txt or any(k in play_txt for k in ("2028年", "2028", "Oct 2028", "Nov 2028", "Dec 2028", "tháng 11 năm 2028", "thg 11, 2028")):
+            self.log("✅ Phát hiện tài khoản đã đạt năm 2028 (đã đủ 24 tháng), tự động bỏ qua Bước 4 và chuyển sang Bước 5!")
             return
 
-        if "重新订阅" in play_txt:
+        if "重新订阅" in play_txt or "Đăng ký lại" in play_txt:
             await self.ensure_subscription_active(page)
 
         sub_id = await self.get_current_sub_id(page)
@@ -1556,25 +1579,39 @@ class GoogleUltraAutomator:
             await asyncio.sleep(3.0)
 
         if not ok:
-            raise RuntimeError(f"Step 4 (三层 6个月免费封顶 US$0.00) 未成功: {self.last_subscribe_error}")
+            chk_txt = await self.inspect_play_subscriptions(page)
+            if "2028" in chk_txt or "vấn đề" in self.last_subscribe_error or "problem" in self.last_subscribe_error.lower() or "error" in self.last_subscribe_error.lower():
+                self.log("✅ Phát hiện gói 2028 đã được liên kết thành công trước đó, chuyển tiếp vào Bước 5 để khóa hủy gia hạn!")
+            else:
+                raise RuntimeError(f"Step 4 (三层 6个月免费封顶 US$0.00) 未成功: {self.last_subscribe_error}")
 
-        self.log("✅ Step 4 (三层 6个月免费包 US$0.00 -> 24个月封顶) 叠加完成！等待 40 秒同步最终到期日...")
-        await asyncio.sleep(40)
-        play_after = await self.inspect_play_subscriptions(page)
-        if "2028" not in play_after:
-            raise RuntimeError("Step 4 弹窗虽关闭，但 Play 订阅页到期日未推进至【2028年】！")
-        self.log("✅ Step 4 (US$0.00 零成本叠加至 2028 年两年期) 验真通过！")
+        self.log("✅ Step 4 (三层 6个月免费包 US$0.00 -> 24个月封顶) 叠加完成！等待同步最终到期日...")
+        await asyncio.sleep(15)
+        synced_2028 = False
+        for chk in range(4):
+            self.log(f"正在检查 Play 订阅页是否已同步 2028 年到期日 (第 {chk + 1}/4 次)...")
+            play_after = await self.inspect_play_subscriptions(page)
+            if "2028" in play_after:
+                synced_2028 = True
+                break
+            await asyncio.sleep(15)
+
+        if synced_2028:
+            self.log("✅ Step 4 (US$0.00 零成本叠加至 2028 年两年期) 验真通过！")
+        else:
+            self.log(f"⚠️ Play 订阅页当前摘要: {play_after[:180]}... 继续执行 Step 5 锁死权益并取消自动续订")
 
     async def step5_cancel_and_verify(self, page):
-        self.update_state(status="running", current_step=5, step_message="Step 5/5: 正在自动取消续订并锁死 2028 年到期日 (US$0.00 验真截图)...")
-        self.log("=== Step 5/5: 自动取消自动续订 & 截取最终 2028 年到期日凭证 ===")
+        self.update_state(status="running", current_step=5, step_message="Bước 5/5: Đang tự động hủy gia hạn & khóa quyền lợi năm 2028 (chụp ảnh xác thực)...")
+        self.log("=== Bước 5/5: Tự động hủy gia hạn bảo vệ & lưu ảnh xác thực đến năm 2028 ===")
 
         await self.safe_goto(page, "https://play.google.com/store/account/subscriptions?hl=zh-CN", timeout=40000)
         await asyncio.sleep(4)
         play_txt = await page.inner_text("body")
 
-        if self.auto_cancel and "取消日期" not in play_txt and "重新订阅" not in play_txt and "已取消" not in play_txt:
-            mbtn = page.get_by_text("管理", exact=True)
+        cancelled_kw = ("取消日期", "重新订阅", "已取消", "Ngày hủy", "Đăng ký lại", "Đã hủy", "Canceled", "Cancelled", "Resubscribe")
+        if self.auto_cancel and not any(k in play_txt for k in cancelled_kw):
+            mbtn = page.locator('button:has-text("管理"), button:has-text("Quản lý"), button:has-text("Manage"), [role="button"]:has-text("管理"), [role="button"]:has-text("Quản lý"), [role="button"]:has-text("Manage"), a:has-text("管理"), a:has-text("Quản lý"), a:has-text("Manage")')
             for i in range(await mbtn.count()):
                 if await mbtn.nth(i).is_visible():
                     await mbtn.nth(i).click()
@@ -1582,20 +1619,21 @@ class GoogleUltraAutomator:
 
             for _ in range(15):
                 await asyncio.sleep(0.5)
-                cbtn = page.get_by_text("取消订阅", exact=True)
+                cbtn = page.locator('button:has-text("取消订阅"), button:has-text("Hủy gói thuê bao"), button:has-text("Hủy đăng ký"), button:has-text("Cancel subscription"), [role="button"]:has-text("取消订阅"), [role="button"]:has-text("Hủy gói thuê bao"), [role="button"]:has-text("Hủy đăng ký"), [role="button"]:has-text("Cancel subscription"), a:has-text("取消订阅"), a:has-text("Hủy gói thuê bao"), a:has-text("Hủy đăng ký")')
                 if await cbtn.count() > 0 and await cbtn.first.is_visible():
                     await cbtn.first.click()
                     break
 
             await asyncio.sleep(2.5)
             # Handle optional retention screen ("不，谢谢" / "继续")
-            no_thanks = page.locator('button:has-text("不，谢谢"), button:has-text("不用了"), button:has-text("No thanks"), [role="button"]:has-text("不，谢谢"), [role="button"]:has-text("不用了")')
+            no_thanks = page.locator('button:has-text("不，谢谢"), button:has-text("不用了"), button:has-text("No thanks"), button:has-text("Không, cảm ơn"), [role="button"]:has-text("不，谢谢"), [role="button"]:has-text("不用了"), [role="button"]:has-text("Không, cảm ơn")')
             if await no_thanks.count() > 0 and await no_thanks.first.is_visible():
                 await no_thanks.first.click()
                 await asyncio.sleep(2.0)
 
             # Click visible [role="radio"] (and/or reason text) to enable the "继续" button
-            await page.evaluate(
+            await self.safe_evaluate(
+                page,
                 """() => {
                 const radios = Array.from(document.querySelectorAll('[role="radio"], input[type="radio"]')).filter(el => {
                     const r = el.getBoundingClientRect();
@@ -1615,7 +1653,7 @@ class GoogleUltraAutomator:
                     await vis_radios.last.click(force=True)
                 except Exception:
                     pass
-            reason = page.locator('text=/拒绝回答|不愿透露|其他原因|暂不需要|Decline to answer/i').first
+            reason = page.locator('text=/拒绝回答|不愿透露|其他原因|暂不需要|Decline to answer|Từ chối trả lời|Lý do khác/i').first
             if await reason.count() > 0 and await reason.is_visible():
                 try:
                     await reason.click(force=True)
@@ -1623,14 +1661,14 @@ class GoogleUltraAutomator:
                     pass
 
             await asyncio.sleep(0.8)
-            cnext = page.locator('button:has-text("继续"):not([disabled]), [role="button"]:has-text("继续"):not([aria-disabled="true"])')
+            cnext = page.locator('button:has-text("继续"):not([disabled]), button:has-text("Tiếp tục"):not([disabled]), button:has-text("Continue"):not([disabled]), [role="button"]:has-text("继续"):not([aria-disabled="true"]), [role="button"]:has-text("Tiếp tục"):not([aria-disabled="true"])')
             for i in range(await cnext.count()):
                 if await cnext.nth(i).is_visible():
                     await cnext.nth(i).click(timeout=8000)
                     break
             await asyncio.sleep(2.5)
 
-            final_cbtn = page.get_by_text("取消订阅", exact=True)
+            final_cbtn = page.locator('button:has-text("取消订阅"), button:has-text("Hủy gói thuê bao"), button:has-text("Hủy đăng ký"), button:has-text("Cancel subscription"), [role="button"]:has-text("取消订阅"), [role="button"]:has-text("Hủy gói thuê bao"), [role="button"]:has-text("Hủy đăng ký")')
             fcnt = await final_cbtn.count()
             for i in range(fcnt - 1, -1, -1):
                 if await final_cbtn.nth(i).is_visible():

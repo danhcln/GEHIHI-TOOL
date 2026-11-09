@@ -1,50 +1,67 @@
-========================================================================  
-  Google AI Pro (5 TB) 零成本两年 (US$0.00 -> 24个月) 全自动控制台  
-========================================================================  
-  
+# Google AI Pro (5 TB) - Bảng Điều Khiển Tự Động 2 Năm Miễn Phí (US$0.00)
 
-声明：该项目并非本人开发，仅作为圈内开源供大家分析学习使用  
-Disclaimer: I did not develop this project; it is provided as an open-source resource for the community to analyze and learn from.  
+Công cụ tự động hóa nhận gói ưu đãi **Google AI Pro (5 TB)** thời hạn 2 năm (24 tháng) hoàn toàn miễn phí ($0.00 USD) thông qua giao diện Web cục bộ tiện lợi và an toàn.
 
-【一、运行环境要求】
-1. Windows 10 / 11 系统
-2. 已安装 Google Chrome 浏览器（默认路径即可）
-3. 已安装 Python 3.10 或更高版本（安装时勾选 Add Python to PATH）
-4. 网络环境：本机开启美区（US）代理，或在控制台左侧填写代理模板
+---
 
-【二、快速启动步骤】
-1. 首次使用请双击运行：【1_首次运行_安装依赖并启动.bat】
-2. 之后日常使用直接双击：【2_启动控制台.bat】
-3. 浏览器会自动打开控制台页面：http://127.0.0.1:8765
+## 🌟 Tính Năng Nổi Bật
 
-【三、自定义填写支付卡 & 跑号说明】
-1. 填写支付卡（必填）：
-   - 在网页左侧【全局配置与内联免税绑卡】区域，填入你自己的 Visa 或 Mastercard 外币卡：
-     * 卡号（16位数字）
-     * 有效期（月 / 年，如 08 / 29）
-     * 安全码（3位 CVC）
-     * 持卡人英文姓名
-     * 免税邮编默认已填好 97201（美国俄勒冈免税州），无需修改
-   - 填写后点击【💾 保存配置】。
-   - 注：脚本内置严格 0 元消费保护，仅在结账弹窗确认为 US$0.00 时才会点击订阅，全程 0 扣费。
+- **Giao diện Web trực quan:** Dễ sử dụng, hỗ trợ toàn bộ tiếng Việt, theo dõi tiến trình thực thi và nhật ký theo thời gian thực.
+- **Quy trình 5 bước tự động (End-to-End):**
+  - **Bước 1:** Tự động đăng nhập Google, xử lý xác minh bảo mật qua Email khôi phục hoặc mã 2FA TOTP.
+  - **Bước 2:** Kích hoạt lớp 12 tháng miễn phí đầu tiên ($0.00) và dùng thử YouTube Premium + tự động liên kết thẻ miễn thuế.
+  - **Bước 3:** Chồng lớp mở rộng 6 tháng thứ hai ($0.00), nâng thời hạn lên 18 tháng.
+  - **Bước 4:** Chồng lớp mở rộng 6 tháng thứ ba ($0.00), nâng thời hạn tối đa lên 24 tháng (2 năm, đến 2028).
+  - **Bước 5:** Tự động chuyển đến Google Play hủy tính năng gia hạn tự động, khóa chặt thời hạn 2 năm miễn phí mà không bao giờ bị trừ tiền sau này.
+- **Cơ chế an toàn 0$ tuyệt đối:** Hệ thống chỉ bấm xác nhận đăng ký khi và chỉ khi bảng thanh toán xác nhận chính xác số tiền là **$0.00 USD**.
 
-2. 批量导入 Google 账号：
-   - 在网页右侧【批量放号导入区】粘贴账号（每行一个），支持以下任意格式：
-     * 邮箱----密码----辅助邮箱
-     * 邮箱----密码----辅助邮箱----2FA密钥
-     * 邮箱----密码----2FA密钥
-   - 点击【➕ 一键导入账号列表】。
+---
 
-3. 开始全自动执行：
-   - 点击单个账号右侧的【▶ 执行】或顶部的【▶ 批量全自动执行】。
-   - 脚本会自动完成：
-     Step 1: 自动登录 Google 并通过辅助邮箱 / 2FA 验证
-     Step 2: 内联免税绑卡 + 首层 12 个月免费包 (US$0.00)
-     Step 3: 叠加二层 6 个月免费包 (US$0.00 -> 18个月)
-     Step 4: 叠加三层 6 个月免费包 (US$0.00 -> 24个月封顶)
-     Step 5: 自动前往 Google Play 取消自动续订，锁死 2 年到期权益并截图验真
+## 💻 Yêu Cầu Môi Trường
 
+1. **Hệ điều hành:** Windows 10 / 11.
+2. **Trình duyệt:** Google Chrome (cài đặt ở đường dẫn mặc định).
+3. **Python:** Phiên bản 3.10 trở lên (khuyên dùng Python 3.11 - 3.14).
+4. **Môi trường mạng:** Bật VPN hoặc Proxy sang khu vực **Hoa Kỳ (US)** (ưu tiên bang Oregon - Portland) để Google áp dụng đúng chính sách miễn thuế $0.00.
 
-# 卡网：https://faka.cdkey.si
-# 博客：https://blog.caowo.de
-# TG群：@Hello_Florence
+---
+
+## 🚀 Hướng Dẫn Sử Dụng Nhanh
+
+### 1. Khởi động công cụ
+Chỉ cần nhấp đúp chuột vào file:
+👉 **`start_local.bat`**  
+*(Script sẽ tự kích hoạt môi trường ảo `.venv`, khởi chạy server và tự động mở trình duyệt tại `http://127.0.0.1:8765`)*.
+
+---
+
+### 2. Thiết lập cấu hình thẻ thanh toán (Khung bên trái)
+Điền thông tin thẻ thanh toán quốc tế (Visa hoặc Mastercard) của bạn:
+- **Số thẻ (16 chữ số)**
+- **Thời hạn (Tháng / Năm)**
+- **Mã bảo mật (CVC gồm 3 chữ số)**
+- **Tên chủ thẻ** (Viết hoa không dấu)
+- **Mã bưu chính miễn thuế:** Giữ nguyên mặc định `97201` (Bang Oregon - Mỹ để được áp dụng thuế $0.00).
+- Nhấn **💾 Lưu cấu hình**.
+
+---
+
+### 3. Nhập danh sách tài khoản Google (Khung bên phải)
+Dán danh sách tài khoản cần chạy vào khung (mỗi tài khoản một dòng), hỗ trợ các định dạng:
+```text
+Email----Mật khẩu----Email khôi phục
+Email----Mật khẩu----Email khôi phục----Khóa 2FA
+Email----Mật khẩu----Khóa 2FA
+```
+Nhấn nút **➕ Nhập danh sách tài khoản**.
+
+---
+
+### 4. Bắt đầu chạy tự động
+- Nhấn **▶ Thực hiện** cạnh tài khoản tương ứng (hoặc **▶ Chạy tự động tất cả tài khoản** ở trên cùng).
+- Trình duyệt Chrome sẽ tự động bật lên và thực hiện toàn bộ 5 bước. Bạn có thể theo dõi trực tiếp qua nhật ký bên dưới.
+
+---
+
+## 🛡️ Tuyên Bố Miễn Trừ Trách Nhiệm (Disclaimer)
+Dự án được cung cấp cho mục đích nghiên cứu, học tập quy trình tự động hóa trình duyệt (Playwright/CDP) và phân tích giao thức. Người dùng tự chịu trách nhiệm về mục đích và hành vi sử dụng của mình.

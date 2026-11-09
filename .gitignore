@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.whl
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Sensitive local configurations and credentials
+config.json
+
+# Local profiles and user data
+profiles/
+screenshots/
+logs/
+*.log
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
