@@ -22,3 +22,4 @@ echo    CÀI ĐẶT HOÀN TẤT!
 echo    Bây giờ bạn có thể nhấp vào "start_local.bat" để khởi động.
 echo ======================================================================
 pause
+
