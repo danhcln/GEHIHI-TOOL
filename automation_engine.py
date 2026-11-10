@@ -1043,20 +1043,42 @@ class GoogleUltraAutomator:
                                                             if (b) b.click();
                                                         }"""
                                                         )
-                                                    self.log(f"[{step_tag or 'modal'}] ✅ Đã nhấp nút 【保存卡】，等待 Google Play 绑定确认...")
-                                                    for _w in range(22):
+                                                    self.log(f"[{step_tag or 'modal'}] ✅ Đã nhấp nút [Lưu thẻ], chờ Google Play xác nhận...")
+                                                    card_error_detected = False
+                                                    for _w in range(25):
                                                         await asyncio.sleep(1.0)
+                                                        # Check if card error returned by Google Payments inside iframe
+                                                        try:
+                                                            im_txt = await tf.inner_text("body", timeout=1000)
+                                                            if any(k in im_txt for k in ("OR_CCREU", "OR_PC", "无法完成此项操作", "declined", "Check that you have", "出了点问题")):
+                                                                err_match = re.search(r"\[OR_[A-Za-z0-9_]+\]", im_txt)
+                                                                err_code = err_match.group(0) if err_match else "Thẻ bị từ chối"
+                                                                self.last_subscribe_error = f"Google từ chối thẻ: {err_code} (Thẻ bị Google giới hạn do đã thêm nhiều tài khoản liên tiếp hoặc ngân hàng chặn)"
+                                                                self.log(f"❌ [{step_tag or 'modal'}] {self.last_subscribe_error}")
+                                                                card_error_detected = True
+                                                                break
+                                                        except Exception:
+                                                            pass
+
                                                         still_im = any("instrumentmanager" in (f.url or "") for f in page.frames)
                                                         if not still_im:
-                                                            self.log(f"[{step_tag or 'modal'}] ✅ 内联trong danh sách thẻ保存完成！")
+                                                            self.log(f"[{step_tag or 'modal'}] ✅ Đã lưu thẻ ngân hàng thành công!")
+                                                            inline_card_saved = True
                                                             break
                                                         if _w == 7 and await sbtn.count() > 0:
                                                             try:
                                                                 await sbtn.click(force=True)
                                                             except Exception:
                                                                 pass
+
+                                                    if card_error_detected:
+                                                        return None, ""
+
                                                     await asyncio.sleep(2.0)
-                                                    inline_card_saved = True
+                                                    if not inline_card_saved:
+                                                        self.last_subscribe_error = "Thêm thẻ vào Google Play quá thời gian chờ (Không lưu được thẻ)"
+                                                        self.log(f"⚠️ [{step_tag or 'modal'}] {self.last_subscribe_error}")
+                                                        return None, ""
                                                     loops_left = 15
                                                     break
                                             except Exception:
@@ -1185,8 +1207,11 @@ class GoogleUltraAutomator:
             if fb_btn:
                 target_fr, clean_txt = await self._poll_eacquire_modal(page, max_loops=60, step_tag=step_tag)
                 if clean_txt == "INLINE_CARD_SAVED_RETRY":
-                    self.log(f"[{step_tag}] Đã thêm thẻ thành công, đang mở lại trang để tải popup .00...")
+                    self.log(f"[{step_tag}] Đã thêm thẻ thành công, đang mở lại trang để tải popup $0.00...")
                     continue
+                if not target_fr and self.last_subscribe_error:
+                    # An error occurred (e.g. card declined or timeout), do not retry in a loop
+                    break
 
         await self.save_screenshot(page, f"{step_tag}_modal")
 
@@ -1196,6 +1221,7 @@ class GoogleUltraAutomator:
 
         self.log(f"[{step_tag}] Nội dung popup thanh toán: {clean_txt[:350]}")
         if "错误" in clean_txt or "Something went wrong" in clean_txt or "unable to change" in clean_txt or "出了点问题" in clean_txt:
+            self.last_subscribe_error = clean_txt[:200]
             self.last_subscribe_error = clean_txt[:200]
             self.log(f"⚠️ [{step_tag}] Popup trả về thông báo: {clean_txt[:200]}")
             return False
