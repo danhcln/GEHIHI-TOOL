@@ -1007,39 +1007,106 @@ class GoogleUltraAutomator:
                                                     cvc_v = (self.card.get("cvc") or "").strip()
                                                     holder_v = (self.card.get("holder") or "CARD HOLDER").strip()
                                                     zip_v = (self.card.get("postal_code") or "97201").strip()
-                                                    await vis.nth(0).click(force=True)
+
+                                                    # 1. Fill Card Number
+                                                    card_loc = tf.locator('input[type="tel"], input[autocomplete="cc-number"], input[name="cardNumber"]').first
+                                                    if await card_loc.count() == 0:
+                                                        card_loc = vis.nth(0)
+
+                                                    await card_loc.click(force=True)
                                                     await asyncio.sleep(0.2)
-                                                    await vis.nth(0).press_sequentially(cnum, delay=35)
+                                                    await page.keyboard.press("Control+A")
+                                                    await page.keyboard.press("Backspace")
+                                                    await asyncio.sleep(0.1)
+                                                    await card_loc.fill(cnum)
                                                     await asyncio.sleep(0.3)
-                                                    await vis.nth(1).click(force=True)
-                                                    await asyncio.sleep(0.2)
-                                                    await vis.nth(1).press_sequentially(f"{expm}{expy}", delay=35)
-                                                    await asyncio.sleep(0.3)
-                                                    await vis.nth(2).click(force=True)
-                                                    await asyncio.sleep(0.2)
-                                                    await vis.nth(2).press_sequentially(cvc_v, delay=35)
-                                                    await asyncio.sleep(0.3)
-                                                    try:
-                                                        cur_name = (await vis.nth(3).input_value(timeout=1000)).strip()
-                                                        if not cur_name:
-                                                            await vis.nth(3).fill(holder_v)
-                                                            await asyncio.sleep(0.2)
-                                                    except Exception:
-                                                        pass
-                                                    if cnt >= 5:
-                                                        await vis.nth(4).click(force=True)
+                                                    cval = re.sub(r"\s+", "", await card_loc.input_value())
+                                                    if len(cval) < len(cnum):
+                                                        await card_loc.click(force=True)
+                                                        await page.keyboard.press("Control+A")
+                                                        await page.keyboard.press("Backspace")
+                                                        await card_loc.press_sequentially(cnum, delay=35)
+                                                    await asyncio.sleep(0.5)
+
+                                                    # 2. Re-locate inputs after Google expands fields
+                                                    vis = tf.locator("input:visible")
+                                                    cnt = await vis.count()
+
+                                                    # Expiration Date (MM/YY)
+                                                    exp_loc = tf.locator('input[autocomplete="cc-exp"], input[name="exp"]').first
+                                                    if await exp_loc.count() == 0 and cnt >= 2:
+                                                        exp_loc = vis.nth(1)
+                                                    if await exp_loc.count() > 0:
+                                                        await exp_loc.click(force=True)
                                                         await asyncio.sleep(0.2)
-                                                        await vis.nth(4).fill("")
-                                                        await vis.nth(4).press_sequentially(zip_v, delay=35)
+                                                        await page.keyboard.press("Control+A")
+                                                        await page.keyboard.press("Backspace")
+                                                        await asyncio.sleep(0.1)
+                                                        await exp_loc.fill(f"{expm}{expy}")
                                                         await asyncio.sleep(0.3)
-                                                    sbtn = tf.locator('button:has-text("保存卡"), button:has-text("保存"), button:has-text("Save card"), button:has-text("Save"), [role="button"]:has-text("保存")').first
+                                                        eval_cur = re.sub(r"[^0-9]", "", await exp_loc.input_value())
+                                                        if eval_cur != f"{expm}{expy}":
+                                                            await exp_loc.click(force=True)
+                                                            await page.keyboard.press("Control+A")
+                                                            await page.keyboard.press("Backspace")
+                                                            await exp_loc.press_sequentially(f"{expm}{expy}", delay=35)
+
+                                                    await asyncio.sleep(0.3)
+
+                                                    # 3. CVV / CVC
+                                                    cvc_loc = tf.locator('input[autocomplete="cc-csc"], input[name="cvc"]').first
+                                                    if await cvc_loc.count() == 0 and cnt >= 3:
+                                                        cvc_loc = vis.nth(2)
+                                                    if await cvc_loc.count() > 0:
+                                                        await cvc_loc.click(force=True)
+                                                        await asyncio.sleep(0.2)
+                                                        await page.keyboard.press("Control+A")
+                                                        await page.keyboard.press("Backspace")
+                                                        await asyncio.sleep(0.1)
+                                                        await cvc_loc.fill(cvc_v)
+                                                        await asyncio.sleep(0.3)
+
+                                                    # 4. Cardholder Name
+                                                    name_loc = tf.locator('input[autocomplete="cc-name"], input[name="cardholderName"]').first
+                                                    if await name_loc.count() == 0 and cnt >= 4:
+                                                        name_loc = vis.nth(3)
+                                                    if await name_loc.count() > 0:
+                                                        try:
+                                                            cur_name = (await name_loc.input_value(timeout=1000)).strip()
+                                                            if not cur_name or cur_name.lower() in ("tridon", "danh", "card holder"):
+                                                                await name_loc.click(force=True)
+                                                                await page.keyboard.press("Control+A")
+                                                                await page.keyboard.press("Backspace")
+                                                                await name_loc.fill(holder_v)
+                                                                await asyncio.sleep(0.2)
+                                                        except Exception:
+                                                            pass
+
+                                                    # 5. ZIP Code
+                                                    zip_loc = tf.locator('input[autocomplete="postal-code"], input[name="postalCode"]').first
+                                                    if await zip_loc.count() == 0 and cnt >= 5:
+                                                        zip_loc = vis.nth(4)
+                                                    if await zip_loc.count() > 0:
+                                                        await zip_loc.click(force=True)
+                                                        await asyncio.sleep(0.2)
+                                                        await page.keyboard.press("Control+A")
+                                                        await page.keyboard.press("Backspace")
+                                                        await asyncio.sleep(0.1)
+                                                        await zip_loc.fill(zip_v)
+                                                        await asyncio.sleep(0.3)
+
+                                                    # 6. Click Save Card button
+                                                    sbtn = tf.locator('button:has-text("Lưu thẻ"), button:has-text("Lưu"), button:has-text("保存卡"), button:has-text("保存"), button:has-text("Save card"), button:has-text("Save"), [role="button"]:has-text("Lưu"), [role="button"]:has-text("保存")').first
                                                     if await sbtn.count() > 0:
                                                         await sbtn.click(force=True)
                                                     else:
                                                         await tf.evaluate(
                                                             """() => {
                                                             const btns = Array.from(document.querySelectorAll('button, [role="button"]'));
-                                                            const b = btns.find(e => (e.innerText || '').includes('保存') || (e.innerText || '').includes('Save'));
+                                                            const b = btns.find(e => {
+                                                                const t = (e.innerText || '').trim();
+                                                                return t.includes('Lưu') || t.includes('保存') || t.includes('Save');
+                                                            });
                                                             if (b) b.click();
                                                         }"""
                                                         )
