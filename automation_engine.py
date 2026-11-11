@@ -1495,6 +1495,36 @@ class GoogleUltraAutomator:
                     try:
                         ft_after = f2_txt
                         clean_after = " | ".join([l.strip() for l in ft_after.splitlines() if l.strip()])
+                        err_keywords = [
+                            "错误",
+                            "出了点问题",
+                            "无法完成",
+                            "拒绝了您的付款",
+                            "发卡机构拒绝",
+                            "付款遭拒",
+                            "支付遭拒",
+                            "由于资金不足",
+                            "[OR-",
+                            "[OR_",
+                            "OR-PFGVEM",
+                            "OR_FGVEM",
+                            "[BX-CPL-05]",
+                            "您的订单仍在处理中",
+                            "订单处理完成后",
+                            "购买失败",
+                            "Something went wrong",
+                            "couldn't be completed",
+                            "Check that you have the correct country",
+                            "declined",
+                            "insufficient funds",
+                        ]
+                        if any(err_kw in clean_after for err_kw in err_keywords):
+                            err_lines = [line.strip() for line in ft_after.splitlines() if any(err_kw in line for err_kw in err_keywords)]
+                            post_click_err = " | ".join(err_lines) if err_lines else clean_after[:300]
+                            self.log(f"❌ [{step_tag}] Ngân hàng từ chối thẻ: {post_click_err}")
+                            await self.save_screenshot(page, f"{step_tag}_declined_error")
+                            break
+
                         if any(
                             ok_kw in clean_after
                             for ok_kw in (
@@ -1509,15 +1539,14 @@ class GoogleUltraAutomator:
                                 "添加备用付款方式",
                                 "备用付款方式",
                                 "Backup payment",
-                                "以后再说",
-                                "知道了",
-                                "Got it",
+                                "欢迎您",
+                                "Welcome",
                             )
                         ):
                             self.log(f"✅ [{step_tag}] Phát hiện thông báo đăng ký thành công!")
                             await self.save_screenshot(page, f"{step_tag}_after_click")
                             try:
-                                dismiss_btn = f2.locator('button:has-text("以后再说"), [role="button"]:has-text("以后再说"), button:has-text("Not now"), [role="button"]:has-text("Not now"), button:has-text("不用了"), button:has-text("知道了")').first
+                                dismiss_btn = f2.locator('button:has-text("以后再说"), [role="button"]:has-text("以后再说"), button:has-text("Not now"), [role="button"]:has-text("Not now"), button:has-text("不用了")').first
                                 if await dismiss_btn.count() > 0 and await dismiss_btn.is_visible():
                                     self.log(f"[{step_tag}] Đang đóng popup thông báo để đồng bộ đơn hàng...")
                                     try:
@@ -1529,7 +1558,7 @@ class GoogleUltraAutomator:
                                         const els = Array.from(document.querySelectorAll('button, [role="button"], span, div'));
                                         const b = els.find(e => {
                                             const t = (e.innerText || '').trim();
-                                            return t === '以后再说' || t === 'Not now' || t === '不用了' || t === '知道了';
+                                            return t === '以后再说' || t === 'Not now' || t === '不用了';
                                         });
                                         if (b) {
                                             b.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, cancelable: true}));
@@ -1545,30 +1574,6 @@ class GoogleUltraAutomator:
                             except Exception:
                                 await asyncio.sleep(4.0)
                             return True
-                        err_keywords = [
-                            "出了点问题",
-                            "无法完成",
-                            "拒绝了您的付款",
-                            "付款遭拒",
-                            "支付遭拒",
-                            "由于资金不足",
-                            "[OR-",
-                            "[OR_",
-                            "OR_FGVEM",
-                            "[BX-CPL-05]",
-                            "您的订单仍在处理中",
-                            "订单处理完成后",
-                            "购买失败",
-                            "Something went wrong",
-                            "couldn't be completed",
-                            "Check that you have the correct country",
-                            "declined",
-                            "insufficient funds",
-                        ]
-                        if any(err_kw in clean_after for err_kw in err_keywords):
-                            err_lines = [line.strip() for line in ft_after.splitlines() if any(err_kw in line for err_kw in err_keywords)]
-                            post_click_err = " | ".join(err_lines) if err_lines else clean_after[:300]
-                            break
                     except Exception:
                         pass
             if post_click_err:
@@ -1846,6 +1851,14 @@ class GoogleUltraAutomator:
         final_shot = await self.save_screenshot(page, "step5_final_verified")
         final_txt = " | ".join([l.strip() for l in (await page.inner_text("body")).splitlines() if l.strip()])
         self.log(f"Trạng thái Google Play Subscriptions cuối cùng: {final_txt[:400]}")
+
+        # Strict verification: Ensure Google One actually appears in subscriptions list
+        has_sub = any(k in final_txt for k in ("Google One", "Google AI", "g1.2tb", "2 TB", "5 TB", "2TB", "5TB"))
+        if not has_sub:
+            err_msg = "Không tìm thấy gói Google One trên Google Play (Đăng ký chưa thành công, có thể thẻ bị ngân hàng từ chối)"
+            self.log(f"❌ [step5_final] {err_msg}")
+            self.last_subscribe_error = err_msg
+            return False
 
         # Parse expiry date from final_txt (multi-language: VN, EN, ZH)
         m_date = re.search(r"(?:取消日期[：:]\s*|续订日期[：:]\s*|将于\s*)([0-9]{4}年[0-9]{1,2}月[0-9]{1,2}日)", final_txt)
